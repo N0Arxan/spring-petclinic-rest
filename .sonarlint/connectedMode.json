@@ -1,0 +1,4 @@
+{
+    "sonarQubeUri": "http://sonar.arxan.me",
+    "projectKey": "org.springframework.samples:spring-petclinic-rest"
+}

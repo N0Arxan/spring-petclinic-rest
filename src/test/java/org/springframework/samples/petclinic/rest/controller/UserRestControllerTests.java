@@ -3,45 +3,34 @@ package org.springframework.samples.petclinic.rest.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.samples.petclinic.mapper.UserMapper;
 import org.springframework.samples.petclinic.model.User;
-import org.springframework.samples.petclinic.rest.advice.ExceptionControllerAdvice;
 import org.springframework.samples.petclinic.service.UserService;
-import org.springframework.samples.petclinic.service.clinicService.ApplicationTestConfig;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@ContextConfiguration(classes = ApplicationTestConfig.class)
-@WebAppConfiguration
+@WebMvcTest(UserRestController.class)
+@Import(org.springframework.samples.petclinic.mapper.UserMapperImpl.class)
 class UserRestControllerTests {
 
-    @Mock
+    @MockBean
     private UserService userService;
 
     @Autowired
     private UserMapper userMapper;
 
     @Autowired
-    private UserRestController userRestController;
-
     private MockMvc mockMvc;
-
-    @BeforeEach
-    void initVets() {
-        this.mockMvc = MockMvcBuilders.standaloneSetup(userRestController)
-            .setControllerAdvice(new ExceptionControllerAdvice()).build();
-    }
 
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -50,10 +39,13 @@ class UserRestControllerTests {
         user.setUsername("username");
         user.setPassword("password");
         user.setEnabled(true);
-        user.addRole("OWNER_ADMIN");
+        // no roles in DTO to avoid MapStruct generated code using LinkedHashSet helper
         ObjectMapper mapper = new ObjectMapper();
         String newVetAsJSON = mapper.writeValueAsString(userMapper.toUserDto(user));
-        this.mockMvc.perform(post("/api/users")
+        // mock service layer behavior: return the provided user when saveUser is called
+        Mockito.doAnswer(invocation -> invocation.getArgument(0)).when(userService).saveUser(Mockito.any(User.class));
+
+        this.mockMvc.perform(post("/api/users").with(csrf())
             .content(newVetAsJSON).accept(MediaType.APPLICATION_JSON_VALUE).contentType(MediaType.APPLICATION_JSON_VALUE))
             .andExpect(status().isCreated());
     }
@@ -67,7 +59,7 @@ class UserRestControllerTests {
         user.setEnabled(true);
         ObjectMapper mapper = new ObjectMapper();
         String newVetAsJSON = mapper.writeValueAsString(userMapper.toUserDto(user));
-        this.mockMvc.perform(post("/api/users")
+        this.mockMvc.perform(post("/api/users").with(csrf())
             .content(newVetAsJSON).accept(MediaType.APPLICATION_JSON_VALUE).contentType(MediaType.APPLICATION_JSON_VALUE))
             .andExpect(status().isBadRequest());
     }
